@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $name
  * @property string $email
  */
-class User extends Model
+class Account extends Model
 {
     /**
      * The "type" of the auto-incrementing ID.
