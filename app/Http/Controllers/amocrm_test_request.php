@@ -90,41 +90,6 @@ class amocrm_test_request extends Controller
         }
     }
 
-    private function json_encode_private($object) {
-
-         $extract_props = function($object) use (&$extract_props){
-            $public = [];
-
-            $reflection = new ReflectionClass(get_class($object));
-
-            foreach ($reflection->getProperties() as $property) {
-                $property->setAccessible(true);
-
-                $value = $property->getValue($object);
-                $name = $property->getName();
-
-                if(is_array($value)) {
-                    $public[$name] = [];
-
-                    foreach ($value as $item) {
-                        if (is_object($item)) {
-                            $itemArray = $extract_props($item);
-                            $public[$name][] = $itemArray;
-                        } else {
-                            $public[$name][] = $item;
-                        }
-                    }
-                } else if(is_object($value)) {
-                    $public[$name] = $extract_props($value);
-                } else $public[$name] = $value;
-            }
-
-            return $public;
-        };
-
-        return json_encode($extract_props($object));
-    }
-
     private function write_tags(TagsCollection|null $tags): ?array
     {
         if ($tags === null)
@@ -285,7 +250,6 @@ class amocrm_test_request extends Controller
         $company->tags = json_encode($this->write_tags($companyModel->getTags()));
         $company->contacts = json_encode($this->write_contacts($companyModel->getContacts()));
         $company->customers = json_encode($this->write_customers($companyModel->getCustomers()));
-        Debugbar::warning($this->json_encode_private($companyModel));
         $company->save();
         return $companyId;
     }
@@ -308,8 +272,6 @@ class amocrm_test_request extends Controller
         $contact->company_id = $this->write_company_by_id($contactModel->getCompany()->getId());
         $contact->catalog_elements = $contactModel?->getCatalogElementsLinks()?->jsonSerialize();
         $contact->customers = json_encode($this->write_customers($contactModel->getCustomers()));
-        Debugbar::warning($this->json_encode_private($contactModel));
-
         $contact->save();
         return $contactId;
     }
