@@ -6,14 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @property integer $id
+ * @property string $created_at
+ * @property string $updated_at
  * @property string $name
- * @property string $email
+ * @property integer $sort
  */
-class User extends Model
+class LossReason extends Model
 {
     /**
      * The "type" of the auto-incrementing ID.
-     *
+     * 
      * @var string
      */
     protected $keyType = 'integer';
@@ -21,7 +23,5 @@ class User extends Model
     /**
      * @var array
      */
-    protected $fillable = ['name', 'email'];
-    public $timestamps = false;
-
+    protected $fillable = ['created_at', 'updated_at', 'name', 'sort'];
 }

@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * @property integer $id
  * @property string $name
- * @property string $email
+ * @property integer $pipeline_id
+ * @property integer $type
+ * @property string $color
  */
-class User extends Model
+class Status extends Model
 {
     /**
      * The "type" of the auto-incrementing ID.
@@ -21,7 +23,7 @@ class User extends Model
     /**
      * @var array
      */
-    protected $fillable = ['name', 'email'];
-    public $timestamps = false;
+    protected $fillable = ['name', 'pipeline_id', 'type', 'color'];
 
+    public $timestamps = false;
 }

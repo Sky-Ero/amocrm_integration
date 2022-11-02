@@ -13,7 +13,8 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('pipelines', function (Blueprint $table) {
+        Schema::dropIfExists('customers');
+        Schema::create('customers', function (Blueprint $table) {
             $table->id();
             $table->string('name', 255)->nullable();
             $table->boolean('is_main')->nullable();
@@ -43,6 +44,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('pipelines');
+        Schema::dropIfExists('customers');
     }
 };
