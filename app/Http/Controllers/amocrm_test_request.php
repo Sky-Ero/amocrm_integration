@@ -27,6 +27,13 @@ use App\Models\Source;
 use App\Models\Status;
 use App\Models\Tag;
 use App\Models\User;
+use App\Writers\CompanyWriter;
+use App\Writers\ContactWriter;
+use App\Writers\CustomerWriter;
+use App\Writers\GroupWriter;
+use App\Writers\LossReasonWriter;
+use App\Writers\TagWriter;
+use App\Writers\UserWriter;
 use Barryvdh\Debugbar\Facades\Debugbar;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -38,10 +45,22 @@ class amocrm_test_request extends Controller
 {
 
     private AmoCRMApiClient $apiClient;
+    private GroupWriter $group;
+    private UserWriter $user;
+    private ContactWriter $contact;
+    private TagWriter $tag;
+    private CompanyWriter $company;
+    private LossReasonWriter $lossReason;
 
     public function test()
     {
-        return view();
+        $this->group = new GroupWriter($this->apiClient);
+        $this->user = new UserWriter($this->apiClient);
+        $this->tag = new TagWriter($this->apiClient);
+        $customer = new CustomerWriter($this->apiClient, $this->tag);
+        $this->contact = new ContactWriter($this->apiClient, $customer);
+        $this->company = new CompanyWriter($this->apiClient, $customer, $this->tag, $this->contact, $this->group);
+        $this->lossReason = new LossReasonWriter($this->apiClient);
     }
 
 
@@ -90,64 +109,6 @@ class amocrm_test_request extends Controller
         }
     }
 
-    private function write_tags(TagsCollection|null $tags): ?array
-    {
-        if ($tags === null)
-            return null;
-
-        $tags_ids = [];
-        for ($j = 0; $j < $tags->count(); $j++){
-
-            if($tags[$j] == null)
-                continue;
-
-            $tags_ids[] = $tags[$j]->getId();
-
-            if (Tag::find($tags[$j]->getId()))
-                continue;
-
-            $tag = new Tag();
-            $tag->id = $tags[$j]->getId();
-            $tag->color = $tags[$j]->getColor();
-            $tag->name = $tags[$j]->getName();
-            $tag->save();
-        }
-        return $tags_ids;
-    }
-
-    private function write_user(UserModel $userModel): ?int
-    {
-        $userId = $userModel->getId();
-        if(User::find($userModel->getId()))
-            return $userId;
-        $user = new User();
-        $user->id = $userModel->getId();
-        $user->email = $userModel->getEmail();
-        $user->name = $userModel->getName();
-        $user->save();
-        return $userId;
-    }
-
-    private function write_user_by_id( int $user_id): ?int
-    {
-        return $this->write_user($this->apiClient->users()->getOne($user_id));
-    }
-
-    private function write_group_by_id( int $id): ?int
-    {
-        if ($id === 0)
-            return 0;
-
-        $roleModel = $this->apiClient->roles()->getOne($id);
-        $roleId = $roleModel->getId();
-        if (Group::find($roleId))
-            return $roleId;
-        $role = new Group();
-        $role->id = $roleModel->getId();
-        $role->name = $roleModel->getName();
-        $role->save();
-        return $roleId;
-    }
 
     private function write_status_by_id( int $id, int $pipelineId): ?int
     {
@@ -226,128 +187,6 @@ class amocrm_test_request extends Controller
         return $lossReasonModel->getId();
     }
 
-
-
-    private function write_company_by_id( int $id): ?int
-    {
-        $companyModel = $this->apiClient->companies()->getOne($id, [CompanyModel::CUSTOMERS]);
-
-        $companyId = $companyModel->getId();
-
-        if (Company::find($companyId))
-            return $companyId;
-        $company = new Company();
-
-        $company->id = $companyModel->getId();
-        $company->name = $companyModel->getName();
-        $company->group_id = $companyModel->getGroupId();
-        $company->responsible_user_id = $companyModel->getResponsibleUserId();
-        $company->created_by = $companyModel->getUpdatedBy();
-        $company->updated_by = $companyModel->getCreatedBy();
-        $company->created_at = $companyModel->getCreatedAt();
-        $company->updated_at = $companyModel->getUpdatedAt();
-        $company->account_id = $companyModel->getAccountId();
-        $company->tags = json_encode($this->write_tags($companyModel->getTags()));
-        $company->contacts = json_encode($this->write_contacts($companyModel->getContacts()));
-        $company->customers = json_encode($this->write_customers($companyModel->getCustomers()));
-        $company->save();
-        return $companyId;
-    }
-
-    private function write_contact_by_id(int $id)
-    {
-        $contactModel = $this->apiClient->contacts()->getOne($id, [ContactModel::CUSTOMERS]);
-
-        $contactId = $contactModel->getId();
-
-        if (Contact::find($contactId))
-            return $contactId;
-        $contact = new Contact;
-        $contact->id = $contactModel->getId();
-        $contact->name = $contactModel->getName();
-        $contact->first_name = $contactModel->getFirstName();
-        $contact->last_name = $contactModel->getLastName();
-        $contact->created_by = $contactModel->getCreatedBy();
-        $contact->updated_by = $contactModel->getUpdatedBy();
-        $contact->company_id = $this->write_company_by_id($contactModel->getCompany()->getId());
-        $contact->catalog_elements = $contactModel?->getCatalogElementsLinks()?->jsonSerialize();
-        $contact->customers = json_encode($this->write_customers($contactModel->getCustomers()));
-        $contact->save();
-        return $contactId;
-    }
-
-    private function write_contacts(ContactsCollection|null $contacts): ?array
-    {
-        if ($contacts == null)
-            return null;
-
-        $contacts_ids = [];
-        for ($j = 0; $j < $contacts->count(); $j++){
-
-            if($contacts[$j] == null)
-                continue;
-
-            $contacts_ids[] = $contacts[$j]->getId();
-            if (Contact::find($contacts[$j]->getId()))
-                continue;
-            $this->write_contact_by_id($contacts[$j]->getId());
-        }
-        return $contacts_ids;
-    }
-
-
-    private function write_customer_by_id(int $id): ?int
-    {
-        $customerModel = $this->apiClient->customers()->getOne($id, [CustomerModel::CONTACTS, CustomerModel::COMPANIES]);
-
-        $customerId = $customerModel->getId();
-
-        if (Customer::find($customerId))
-            return $customerId;
-        $customer = new Customer();
-
-        $customer->id = $customerModel->getId();
-        $customer->name = $customerModel->getname();
-        $customer->responsible_user_id = $customerModel->getResponsibleUserId();
-        $customer->created_by = $customerModel->getCreatedBy();
-        $customer->updated_by = $customerModel->getUpdatedBy();
-        $customer->created_at = $customerModel->getCreatedAt();
-        $customer->updated_at = $customerModel->getUpdatedAt();
-        $customer->closest_task_at = $customerModel->getClosestTaskAt();
-        $customer->is_deleted = $customerModel->getIsDeleted();
-        $customer->ltv = $customerModel->getLtv();
-        $customer->purchases_count = $customerModel->getPurchasesCount();
-        $customer->average_check = $customerModel->getAverageCheck();
-        $customer->account_id = $customerModel->getAccountId();
-        $customer->contacts = $customerModel->getContacts();
-        $customer->catalog_elements = $customerModel->getCatalogElementsLinks();
-        $customer->company_id = $customerModel->getCompany()->getId();
-        $customer->tags = $this->write_tags($customerModel->getTags());
-        $customer->segments = json_encode($customerModel->getSegments());
-
-        $customer->save();
-        return $customerId;
-    }
-
-    private function write_customers(CustomersCollection|null $customers): ?array
-    {
-        if ($customers == null)
-            return null;
-        $customers_ids = [];
-        for ($j = 0; $j < $customers->count(); $j++){
-
-            if($customers[$j] == null)
-                continue;
-
-            $customers_ids[] = $customers[$j]->getId();
-
-            if (Customer::find($customers[$j]->getId()))
-                continue;
-            $this->write_customer_by_id($customers[$j]->getId());
-        }
-        return $customers_ids;
-    }
-
     /**
      * Handle the incoming request.
      *
@@ -398,25 +237,25 @@ class amocrm_test_request extends Controller
 
                     $lead->updated_by = $l->getUpdatedBy();
 
-                    $lead->responsible_user_id = $this->write_user_by_id($l->getResponsibleUserId());
+                    $lead->responsible_user_id = $this->user->write_by_id($l->getResponsibleUserId());
 
-                    $lead->group_id = $this->write_group_by_id($l->getGroupId());
+                    $lead->group_id = $this->group->write_by_id($l->getGroupId());
 
                     $lead->status_id = $this->write_status_by_id($l->getStatusId(), $l->getPipelineId());
 
                     $lead->pipeline_id = $this->write_pipeline_by_id($l->getPipelineId());
 
-                    $lead->source_id = $this->write_source_by_id( $l->getSourceExternalId());
+                    $lead->source_id = $this->write_source_by_id($l->getSourceExternalId());
 
-                    $lead->tags = json_encode($this->write_tags($l->getTags()));
+                    $lead->tags = json_encode($this->tag->write_collection($l->getTags()));
 
-                    $lead->loss_reason_id = $this->write_loss_reason($l->getLossReason());
+                    $lead->loss_reason_id = $this->lossReason->write_by_id($l->getLossReason()?->getId());
 
-                    $lead->company_id = $this->write_company_by_id($l->getCompany()->getId());
+                    $lead->company_id = $this->company->write_by_id($l->getCompany()->getId());
 
                     $lead->catalog_elements = json_encode($l->getCatalogElementsLinks()?->jsonSerialize()) ?? null;
 
-                    $lead->contacts = json_encode($this->write_contacts($l->getContacts()));
+                    $lead->contacts = json_encode($this->contact->write_collection($l->getContacts()));
 
                     $lead->save();
                 }
